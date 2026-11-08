@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -36,7 +35,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            MaterialTheme {
+            AppTheme {
                 var update by remember { mutableStateOf<UpdateInfo?>(null) }
                 var items by remember { mutableStateOf(store.load()) }
                 val saveItems: (List<Subscription>) -> Unit = { items = it; store.save(it) }
@@ -51,15 +50,22 @@ class MainActivity : ComponentActivity() {
                 Surface(modifier = Modifier.fillMaxSize()) {
                     TrackerScreen(
                         items = items,
-                        onAdd = { name, price, cycle, trialDays ->
-                            val trialEnd = trialDays?.let { trialEndFromDays(System.currentTimeMillis(), it) }
-                            saveItems(items + Subscription(System.currentTimeMillis(), name, price, cycle, trialEnd))
+                        onAdd = { name, price, cycle, trialDays, category ->
+                            val now = System.currentTimeMillis()
+                            val trialEnd = trialDays?.let { trialEndFromDays(now, it) }
+                            saveItems(items + Subscription(now, name, price, cycle, trialEnd, category))
+                        },
+                        onEdit = { s, name, price, cycle, category ->
+                            saveItems(
+                                items.map {
+                                    if (it.id == s.id) it.copy(name = name, price = price, cycle = cycle, category = category) else it
+                                },
+                            )
                         },
                         onDelete = { s -> saveItems(items.filter { it.id != s.id }) },
                         onConvertTrial = { s ->
                             saveItems(items.map { if (it.id == s.id) it.copy(trialEndMillis = null) else it })
                         },
-                        modifier = Modifier.statusBarsPadding(),
                     )
                 }
 

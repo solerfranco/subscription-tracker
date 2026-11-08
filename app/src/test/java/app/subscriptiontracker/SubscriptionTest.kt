@@ -28,6 +28,27 @@ class SubscriptionTest {
     }
 
     @Test
+    fun nextRenewalAdvancesByCycle() {
+        val monthly = Subscription(1, "X", 5.0, BillingCycle.MONTHLY, startMillis = 0)
+        val next = monthly.nextRenewal(10 * day)
+        assertEquals(true, next > 10 * day && next <= 10 * day + 32 * day)
+        val yearly = Subscription(2, "Y", 5.0, BillingCycle.YEARLY, startMillis = 0)
+        assertEquals(true, yearly.nextRenewal(10 * day) > 360 * day)
+    }
+
+    @Test
+    fun categoryBreakdownAndSearch() {
+        val items = listOf(
+            Subscription(1, "Netflix", 10.0, BillingCycle.MONTHLY, category = Category.STREAMING),
+            Subscription(2, "Spotify", 5.0, BillingCycle.MONTHLY, category = Category.MUSIC),
+            Subscription(3, "Disney", 20.0, BillingCycle.MONTHLY, category = Category.STREAMING),
+        )
+        assertEquals(Category.STREAMING to 30.0, spendingByCategory(items).first())
+        assertEquals(listOf("Netflix"), items.filterAndSort("net", SortMode.NAME, 0).map { it.name })
+        assertEquals("Disney", items.filterAndSort("", SortMode.PRICE, 0).first().name)
+    }
+
+    @Test
     fun nonTrialHasNoDaysLeft() {
         assertNull(Subscription(1, "X", 5.0, BillingCycle.MONTHLY).trialDaysLeft(0))
     }
