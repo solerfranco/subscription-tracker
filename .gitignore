@@ -5,3 +5,7 @@ local.properties
 *.jks
 .idea/
 app/build/
+
+# Volcados de memoria de la JVM (pueden pesar cientos de MB)
+*.hprof
+java_pid*.hprof
