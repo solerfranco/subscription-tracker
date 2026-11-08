@@ -5,8 +5,8 @@ plugins {
 
 // Versión y firma vienen del entorno (el orquestador las pone al publicar). Nada de secretos en el repo.
 // APP_VERSION_NAME: semver, p. ej. 1.2.0. APP_VERSION_CODE: entero que sube en cada release.
-val versionNameEnv = System.getenv("APP_VERSION_NAME")?.takeIf { it.isNotBlank() } ?: "0.1.0"
-val versionCodeEnv = System.getenv("APP_VERSION_CODE")?.toIntOrNull() ?: 1
+val versionNameEnv = System.getenv("APP_VERSION_NAME")?.takeIf { it.isNotBlank() } ?: "0.2.0"
+val versionCodeEnv = System.getenv("APP_VERSION_CODE")?.toIntOrNull() ?: 2
 
 // Firma de release: un keystore propio de la app, fuera del repo. Sin esto no hay updates posibles.
 val releaseStore = System.getenv("RELEASE_STORE_FILE")?.takeIf { it.isNotBlank() }
