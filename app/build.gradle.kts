@@ -3,7 +3,7 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
-// Versión y firma vienen del entorno (el orquestador las pone al publicar). Nada de secretos en el repo.
+// VersiÃ³n y firma vienen del entorno (el orquestador las pone al publicar). Nada de secretos en el repo.
 // APP_VERSION_NAME: semver, p. ej. 1.2.0. APP_VERSION_CODE: entero que sube en cada release.
 val versionNameEnv = System.getenv("APP_VERSION_NAME")?.takeIf { it.isNotBlank() } ?: "0.2.0"
 val versionCodeEnv = System.getenv("APP_VERSION_CODE")?.toIntOrNull() ?: 2
@@ -22,7 +22,7 @@ android {
         versionCode = versionCodeEnv
         versionName = versionNameEnv
         // Repo de GitHub de donde salen las actualizaciones. Lo pone create-app al crear la app.
-        buildConfigField("String", "UPDATE_REPO", "\"__UPDATE_REPO__\"")
+        buildConfigField("String", "UPDATE_REPO", "\"solerfranco/subscription-tracker\"")
     }
 
     signingConfigs {
