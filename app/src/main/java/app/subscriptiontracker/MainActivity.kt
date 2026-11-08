@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -30,11 +31,15 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 class MainActivity : ComponentActivity() {
+    private val store by lazy { SubscriptionStore(this) }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
             MaterialTheme {
                 var update by remember { mutableStateOf<UpdateInfo?>(null) }
+                var items by remember { mutableStateOf(store.load()) }
+                val saveItems: (List<Subscription>) -> Unit = { items = it; store.save(it) }
 
                 // Al abrir la app, busca una versión nueva. Sin red o con error, no molesta.
                 LaunchedEffect(Unit) {
@@ -44,13 +49,18 @@ class MainActivity : ComponentActivity() {
                 }
 
                 Surface(modifier = Modifier.fillMaxSize()) {
-                    Column(
-                        modifier = Modifier.padding(24.dp),
-                        verticalArrangement = Arrangement.Center,
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                    ) {
-                        Text("Subscription Tracker")
-                    }
+                    TrackerScreen(
+                        items = items,
+                        onAdd = { name, price, cycle, trialDays ->
+                            val trialEnd = trialDays?.let { trialEndFromDays(System.currentTimeMillis(), it) }
+                            saveItems(items + Subscription(System.currentTimeMillis(), name, price, cycle, trialEnd))
+                        },
+                        onDelete = { s -> saveItems(items.filter { it.id != s.id }) },
+                        onConvertTrial = { s ->
+                            saveItems(items.map { if (it.id == s.id) it.copy(trialEndMillis = null) else it })
+                        },
+                        modifier = Modifier.statusBarsPadding(),
+                    )
                 }
 
                 update?.let { info ->
