@@ -23,6 +23,8 @@ class SubscriptionStore(context: Context) {
                     trialEndMillis = if (o.has("trialEnd")) o.getLong("trialEnd") else null,
                     category = runCatching { Category.valueOf(o.getString("category")) }.getOrDefault(Category.OTHER),
                     startMillis = if (o.has("start")) o.getLong("start") else id,
+                    paused = o.optBoolean("paused", false),
+                    notes = o.optString("notes", ""),
                 )
             }
         }.getOrDefault(emptyList())
@@ -39,6 +41,8 @@ class SubscriptionStore(context: Context) {
                     put("cycle", s.cycle.name)
                     put("category", s.category.name)
                     put("start", s.startMillis)
+                    put("paused", s.paused)
+                    put("notes", s.notes)
                     s.trialEndMillis?.let { put("trialEnd", it) }
                 },
             )
@@ -46,7 +50,14 @@ class SubscriptionStore(context: Context) {
         prefs.edit().putString(KEY, arr.toString()).apply()
     }
 
+    fun loadCurrency(): String = prefs.getString(CURRENCY_KEY, "$") ?: "$"
+
+    fun saveCurrency(symbol: String) {
+        prefs.edit().putString(CURRENCY_KEY, symbol).apply()
+    }
+
     private companion object {
         const val KEY = "items"
+        const val CURRENCY_KEY = "currency"
     }
 }

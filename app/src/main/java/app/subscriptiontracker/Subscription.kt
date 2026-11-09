@@ -33,8 +33,14 @@ data class Subscription(
     val category: Category = Category.OTHER,
     /** Fecha del primer cobro; de ahí salen las renovaciones. Por defecto, cuando se creó. */
     val startMillis: Long = id,
+    /** Pausada: no se cuenta en los gastos ni en los próximos cobros. */
+    val paused: Boolean = false,
+    val notes: String = "",
 ) {
     val isTrial: Boolean get() = trialEndMillis != null
+
+    /** Cuenta para el gasto: ni prueba ni pausada. */
+    val isCharging: Boolean get() = !isTrial && !paused
 }
 
 fun Subscription.monthlyCost(): Double = when (cycle) {
@@ -44,7 +50,7 @@ fun Subscription.monthlyCost(): Double = when (cycle) {
 
 /** Gasto mensual de las suscripciones activas; las pruebas no cuentan. */
 fun monthlySpending(items: List<Subscription>): Double =
-    items.filter { !it.isTrial }.sumOf { it.monthlyCost() }
+    items.filter { it.isCharging }.sumOf { it.monthlyCost() }
 
 fun yearlySpending(items: List<Subscription>): Double = monthlySpending(items) * 12
 
@@ -71,14 +77,24 @@ fun Subscription.daysUntilRenewal(nowMillis: Long): Long {
 
 /** Gasto mensual por categoría (solo activas), de mayor a menor. */
 fun spendingByCategory(items: List<Subscription>): List<Pair<Category, Double>> =
-    items.filter { !it.isTrial }
+    items.filter { it.isCharging }
         .groupBy { it.category }
         .map { (c, list) -> c to list.sumOf { it.monthlyCost() } }
         .sortedByDescending { it.second }
 
 /** Lo que se cobra en los próximos [days] días (suscripciones activas). */
 fun upcomingCharges(items: List<Subscription>, nowMillis: Long, days: Int): Double =
-    items.filter { !it.isTrial && it.daysUntilRenewal(nowMillis) <= days }.sumOf { it.price }
+    items.filter { it.isCharging && it.daysUntilRenewal(nowMillis) <= days }.sumOf { it.price }
+
+data class Currency(val symbol: String, val label: String)
+
+val currencies = listOf(
+    Currency("$", "Peso / Dólar ($)"),
+    Currency("€", "Euro (€)"),
+    Currency("£", "Libra (£)"),
+    Currency("¥", "Yen (¥)"),
+    Currency("R$", "Real (R$)"),
+)
 
 fun List<Subscription>.filterAndSort(query: String, sort: SortMode, nowMillis: Long): List<Subscription> {
     val filtered = if (query.isBlank()) this else filter { it.name.contains(query.trim(), ignoreCase = true) }

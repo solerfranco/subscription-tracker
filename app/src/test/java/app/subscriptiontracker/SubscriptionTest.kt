@@ -20,6 +20,16 @@ class SubscriptionTest {
     }
 
     @Test
+    fun pausedSubscriptionsAreNotCounted() {
+        val items = listOf(
+            Subscription(1, "Netflix", 10.0, BillingCycle.MONTHLY),
+            Subscription(2, "Spotify", 5.0, BillingCycle.MONTHLY, paused = true),
+        )
+        assertEquals(10.0, monthlySpending(items), 1e-9)
+        assertEquals(1, spendingByCategory(items).size)
+    }
+
+    @Test
     fun trialDaysLeftRoundsUp() {
         val s = Subscription(1, "X", 5.0, BillingCycle.MONTHLY, trialEndMillis = 3 * day)
         assertEquals(3L, s.trialDaysLeft(0))

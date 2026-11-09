@@ -38,6 +38,7 @@ class MainActivity : ComponentActivity() {
             AppTheme {
                 var update by remember { mutableStateOf<UpdateInfo?>(null) }
                 var items by remember { mutableStateOf(store.load()) }
+                var currency by remember { mutableStateOf(store.loadCurrency()) }
                 val saveItems: (List<Subscription>) -> Unit = { items = it; store.save(it) }
 
                 // Al abrir la app, busca una versión nueva. Sin red o con error, no molesta.
@@ -50,17 +51,22 @@ class MainActivity : ComponentActivity() {
                 Surface(modifier = Modifier.fillMaxSize()) {
                     TrackerScreen(
                         items = items,
-                        onAdd = { name, price, cycle, trialDays, category ->
+                        currency = currency,
+                        onCurrencyChange = { currency = it; store.saveCurrency(it) },
+                        onAdd = { name, price, cycle, trialDays, category, notes ->
                             val now = System.currentTimeMillis()
                             val trialEnd = trialDays?.let { trialEndFromDays(now, it) }
-                            saveItems(items + Subscription(now, name, price, cycle, trialEnd, category))
+                            saveItems(items + Subscription(now, name, price, cycle, trialEnd, category, notes = notes))
                         },
-                        onEdit = { s, name, price, cycle, category ->
+                        onEdit = { s, name, price, cycle, category, notes ->
                             saveItems(
                                 items.map {
-                                    if (it.id == s.id) it.copy(name = name, price = price, cycle = cycle, category = category) else it
+                                    if (it.id == s.id) it.copy(name = name, price = price, cycle = cycle, category = category, notes = notes) else it
                                 },
                             )
+                        },
+                        onTogglePause = { s ->
+                            saveItems(items.map { if (it.id == s.id) it.copy(paused = !it.paused) else it })
                         },
                         onDelete = { s -> saveItems(items.filter { it.id != s.id }) },
                         onConvertTrial = { s ->

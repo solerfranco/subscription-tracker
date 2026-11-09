@@ -1,6 +1,7 @@
 package app.subscriptiontracker
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -31,10 +32,13 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -42,6 +46,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -52,7 +57,10 @@ import java.util.Date
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 
-private fun money(v: Double) = String.format(Locale.getDefault(), "$%.2f", v)
+private val LocalCurrency = compositionLocalOf { "$" }
+
+@Composable
+private fun money(v: Double) = String.format(Locale.getDefault(), "%s%.2f", LocalCurrency.current, v)
 
 private fun cycleLabel(c: BillingCycle) = if (c == BillingCycle.MONTHLY) "mes" else "año"
 
@@ -69,8 +77,11 @@ private val categoryColors = mapOf(
 @Composable
 fun TrackerScreen(
     items: List<Subscription>,
-    onAdd: (name: String, price: Double, cycle: BillingCycle, trialDays: Int?, category: Category) -> Unit,
-    onEdit: (Subscription, name: String, price: Double, cycle: BillingCycle, category: Category) -> Unit,
+    currency: String,
+    onCurrencyChange: (String) -> Unit,
+    onAdd: (name: String, price: Double, cycle: BillingCycle, trialDays: Int?, category: Category, notes: String) -> Unit,
+    onEdit: (Subscription, name: String, price: Double, cycle: BillingCycle, category: Category, notes: String) -> Unit,
+    onTogglePause: (Subscription) -> Unit,
     onDelete: (Subscription) -> Unit,
     onConvertTrial: (Subscription) -> Unit,
     modifier: Modifier = Modifier,
@@ -78,6 +89,7 @@ fun TrackerScreen(
     var showAdd by rememberSaveable { mutableStateOf(false) }
     var editing by remember { mutableStateOf<Subscription?>(null) }
     var toDelete by remember { mutableStateOf<Subscription?>(null) }
+    var showCurrency by remember { mutableStateOf(false) }
     var query by rememberSaveable { mutableStateOf("") }
     var sort by rememberSaveable { mutableStateOf(SortMode.RENEWAL) }
     val now = System.currentTimeMillis()
@@ -85,6 +97,7 @@ fun TrackerScreen(
     val trials = items.filter { it.isTrial }.sortedBy { it.trialEndMillis }
     val shown = active.filterAndSort(query, sort, now)
 
+    CompositionLocalProvider(LocalCurrency provides currency) {
     Scaffold(
         modifier = modifier,
         floatingActionButton = {
@@ -100,7 +113,7 @@ fun TrackerScreen(
             contentPadding = androidx.compose.foundation.layout.PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 96.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            item { SummaryCard(items, active.size, now) }
+            item { SummaryCard(items, active.count { !it.paused }, now, onCurrency = { showCurrency = true }) }
 
             val byCategory = spendingByCategory(items)
             if (byCategory.size > 1) {
@@ -157,7 +170,7 @@ fun TrackerScreen(
             }
             items(shown, key = { it.id }) { s ->
                 val days = s.daysUntilRenewal(now)
-                val renewal = when (days) {
+                val renewal = if (s.paused) "pausada" else when (days) {
                     0L -> "se renueva hoy"
                     1L -> "se renueva mañana"
                     else -> "se renueva en $days días"
@@ -165,8 +178,9 @@ fun TrackerScreen(
                 SubscriptionCard(
                     sub = s,
                     subtitle = "${money(s.price)}/${cycleLabel(s.cycle)} · $renewal",
-                    urgent = days <= 2,
+                    urgent = days <= 2 && !s.paused,
                     actions = {
+                        TextButton(onClick = { onTogglePause(s) }) { Text(if (s.paused) "Reanudar" else "Pausar") }
                         IconButton(onClick = { editing = s }) { Icon(Icons.Default.Edit, contentDescription = "Editar") }
                         IconButton(onClick = { toDelete = s }) { Icon(Icons.Default.Delete, contentDescription = "Eliminar") }
                     },
@@ -179,8 +193,8 @@ fun TrackerScreen(
         SubscriptionDialog(
             initial = null,
             onDismiss = { showAdd = false },
-            onConfirm = { name, price, cycle, trialDays, category ->
-                onAdd(name, price, cycle, trialDays, category)
+            onConfirm = { name, price, cycle, trialDays, category, notes ->
+                onAdd(name, price, cycle, trialDays, category, notes)
                 showAdd = false
             },
         )
@@ -189,8 +203,8 @@ fun TrackerScreen(
         SubscriptionDialog(
             initial = s,
             onDismiss = { editing = null },
-            onConfirm = { name, price, cycle, _, category ->
-                onEdit(s, name, price, cycle, category)
+            onConfirm = { name, price, cycle, _, category, notes ->
+                onEdit(s, name, price, cycle, category, notes)
                 editing = null
             },
         )
@@ -203,6 +217,27 @@ fun TrackerScreen(
             dismissButton = { TextButton(onClick = { toDelete = null }) { Text("Cancelar") } },
         )
     }
+    if (showCurrency) {
+        AlertDialog(
+            onDismissRequest = { showCurrency = false },
+            title = { Text("Moneda") },
+            text = {
+                Column {
+                    currencies.forEach { c ->
+                        Row(
+                            Modifier.fillMaxWidth().clickable { onCurrencyChange(c.symbol); showCurrency = false },
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            RadioButton(selected = c.symbol == currency, onClick = null)
+                            Text(c.label, Modifier.padding(start = 12.dp, top = 12.dp, bottom = 12.dp))
+                        }
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = { showCurrency = false }) { Text("Cerrar") } },
+        )
+    }
+    }
 }
 
 @Composable
@@ -211,7 +246,7 @@ private fun SectionTitle(text: String) {
 }
 
 @Composable
-private fun SummaryCard(items: List<Subscription>, activeCount: Int, now: Long) {
+private fun SummaryCard(items: List<Subscription>, activeCount: Int, now: Long, onCurrency: () -> Unit) {
     Card(
         Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(28.dp),
@@ -235,6 +270,7 @@ private fun SummaryCard(items: List<Subscription>, activeCount: Int, now: Long) 
                     modifier = Modifier.padding(top = 12.dp),
                 )
             }
+            TextButton(onClick = onCurrency, modifier = Modifier.padding(top = 4.dp)) { Text("Moneda: ${LocalCurrency.current}") }
         }
     }
 }
@@ -266,7 +302,10 @@ private fun CategoryBreakdown(data: List<Pair<Category, Double>>) {
 
 @Composable
 private fun SubscriptionCard(sub: Subscription, subtitle: String, urgent: Boolean, actions: @Composable () -> Unit) {
-    Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(24.dp)) {
+    Card(
+        Modifier.fillMaxWidth().alpha(if (sub.paused) 0.6f else 1f),
+        shape = RoundedCornerShape(24.dp),
+    ) {
         Row(
             Modifier.padding(start = 16.dp, top = 12.dp, bottom = 12.dp, end = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -289,6 +328,9 @@ private fun SubscriptionCard(sub: Subscription, subtitle: String, urgent: Boolea
                     style = MaterialTheme.typography.bodySmall,
                     color = if (urgent) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                if (sub.notes.isNotBlank()) {
+                    Text(sub.notes, style = MaterialTheme.typography.bodySmall, maxLines = 2)
+                }
                 Text(
                     "${sub.category.label} · ${DateFormat.getDateInstance(DateFormat.MEDIUM).format(Date(sub.nextRenewal(System.currentTimeMillis())))}",
                     style = MaterialTheme.typography.labelSmall,
@@ -304,7 +346,7 @@ private fun SubscriptionCard(sub: Subscription, subtitle: String, urgent: Boolea
 private fun SubscriptionDialog(
     initial: Subscription?,
     onDismiss: () -> Unit,
-    onConfirm: (String, Double, BillingCycle, Int?, Category) -> Unit,
+    onConfirm: (String, Double, BillingCycle, Int?, Category, String) -> Unit,
 ) {
     val editing = initial != null
     var name by remember { mutableStateOf(initial?.name ?: "") }
@@ -313,6 +355,7 @@ private fun SubscriptionDialog(
     var category by remember { mutableStateOf(initial?.category ?: Category.OTHER) }
     var isTrial by remember { mutableStateOf(initial?.isTrial ?: false) }
     var trialDays by remember { mutableStateOf("7") }
+    var notes by remember { mutableStateOf(initial?.notes ?: "") }
 
     val priceValue = price.replace(',', '.').toDoubleOrNull()
     val daysValue = trialDays.toIntOrNull()
@@ -354,6 +397,7 @@ private fun SubscriptionDialog(
                         FilterChip(selected = category == c, onClick = { category = c }, label = { Text(c.label) })
                     }
                 }
+                OutlinedTextField(notes, { notes = it }, label = { Text("Notas (opcional)") }, maxLines = 3)
                 if (isTrial && !editing) {
                     OutlinedTextField(
                         trialDays,
@@ -368,7 +412,7 @@ private fun SubscriptionDialog(
         confirmButton = {
             TextButton(
                 enabled = valid,
-                onClick = { onConfirm(name.trim(), priceValue!!, cycle, if (isTrial) daysValue else null, category) },
+                onClick = { onConfirm(name.trim(), priceValue!!, cycle, if (isTrial) daysValue else null, category, notes.trim()) },
             ) { Text("Guardar") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } },
